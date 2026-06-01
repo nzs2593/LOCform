@@ -151,46 +151,48 @@
     return k;
   }
 
-  // Extract URL from a string — handles absolute, relative, and (url) formats
-  function extractUrl(s) {
-    const clean = s.replace(/^\(|\)\s*$/, '').trim();
-    if (/^https?:\/\//.test(clean) || /^\//.test(clean)) return clean;
-    return null;
+  // Strip outer parens from URL: "(/path)" → "/path"
+  function cleanUrl(s) {
+    return s.replace(/^\(|\)\s*$/g, '').trim();
   }
 
   function parseOneBtn(lines, i) {
     const plain = lines[i].trim().replace(/<[^>]+>/g, '').trim();
 
-    // Format 1 — inline: "Кнопка зеленая: Button text" (marker + text on same line)
-    const inline = plain.match(/^(?:кнопка|Button)\s+([a-zа-яёA-ZА-ЯЁ]+)\s*:\s+(.+)$/i);
-    if (inline) {
-      const color = inline[1], text = inline[2].trim();
+    // Anchor: "Кнопка зеленая:" or "Кнопка белая:" (and english Button green/white)
+    // Text may follow on the SAME line after the colon, or on the NEXT line
+    const m = plain.match(/^(?:Кнопка|кнопка|Button)\s+(зелен\w*|бел\w*|green|white)\s*:\s*(.*)/i);
+    if (!m) return null;
+
+    const color = m[1];                // зеленая / белая / green / white
+    const sameLineText = m[2].trim();  // text after colon (may be empty)
+
+    if (sameLineText) {
+      // Check if URL is embedded in sameLineText: "Text (/url)" or "Text https://url"
+      const emb = sameLineText.match(/^(.+?)\s+(\([^)]+\)|https?:\/\/\S+|\/\S+)\s*$/);
+      if (emb) return { color, text: emb[1].trim(), url: cleanUrl(emb[2]), nextI: i + 1 };
+      // Otherwise URL is on the next line
       const j = skipBr(lines, i + 1);
       if (j >= lines.length) return null;
-      const urlRaw = lines[j].trim().replace(/<[^>]+>/g, '').trim();
-      const url = extractUrl(urlRaw);
-      if (url) return { color, text, url, nextI: j + 1 };
-      return null;
+      const url = cleanUrl(lines[j].trim().replace(/<[^>]+>/g, '').trim());
+      if (!url) return null;
+      return { color, text: sameLineText, url, nextI: j + 1 };
     }
 
-    // Format 2 — marker only: "кнопка" / "кнопка:" / "кнопка зеленая:"
-    const marker = plain.match(/^(?:кнопка|Button)\s*([a-zа-яёA-ZА-ЯЁ]*)\s*:?\s*$/i);
-    if (!marker) return null;
-    const color = marker[1] || 'зеленая';
+    // Text is on the next line
     const j = skipBr(lines, i + 1);
     if (j >= lines.length) return null;
     const np = lines[j].trim().replace(/<[^>]+>/g, '').trim();
     if (!np) return null;
 
-    // Sub-format A: "Text https://url" or "Text /relative"
-    const sm = np.match(/^(.+?)\s+(https?:\/\/\S+|\/\S+)\s*$/);
-    if (sm) return { color, text: sm[1].trim(), url: sm[2].trim(), nextI: j + 1 };
+    // "Text https://url" or "Text /relative" on same line
+    const sm = np.match(/^(.+?)\s+(https?:\/\/\S+|\/\S+|\(\S+\))\s*$/);
+    if (sm) return { color, text: sm[1].trim(), url: cleanUrl(sm[2]), nextI: j + 1 };
 
-    // Sub-format B: text on one line, url on next
+    // Text then URL on separate line
     const k = skipBr(lines, j + 1);
-    const urlRaw = lines[k]?.trim().replace(/<[^>]+>/g, '').trim();
-    const url = urlRaw ? extractUrl(urlRaw) : null;
-    if (url) return { color, text: np, url, nextI: k + 1 };
+    const urlRaw = cleanUrl(lines[k]?.trim().replace(/<[^>]+>/g, '').trim() || '');
+    if (urlRaw) return { color, text: np, url: urlRaw, nextI: k + 1 };
 
     return null;
   }
