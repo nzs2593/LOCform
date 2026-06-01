@@ -151,24 +151,47 @@
     return k;
   }
 
+  // Extract URL from a string — handles absolute, relative, and (url) formats
+  function extractUrl(s) {
+    const clean = s.replace(/^\(|\)\s*$/, '').trim();
+    if (/^https?:\/\//.test(clean) || /^\//.test(clean)) return clean;
+    return null;
+  }
+
   function parseOneBtn(lines, i) {
     const plain = lines[i].trim().replace(/<[^>]+>/g, '').trim();
-    // Accepts: кнопка / кнопка: / кнопка зеленая: / кнопка белая: / Button green: etc.
-    const m = plain.match(/^(?:кнопка|Button)\s*([a-zа-яёA-ZА-ЯЁ]*)\s*:?\s*$/i);
-    if (!m) return null;
-    const color = m[1] || 'зеленая';
+
+    // Format 1 — inline: "Кнопка зеленая: Button text" (marker + text on same line)
+    const inline = plain.match(/^(?:кнопка|Button)\s+([a-zа-яёA-ZА-ЯЁ]+)\s*:\s+(.+)$/i);
+    if (inline) {
+      const color = inline[1], text = inline[2].trim();
+      const j = skipBr(lines, i + 1);
+      if (j >= lines.length) return null;
+      const urlRaw = lines[j].trim().replace(/<[^>]+>/g, '').trim();
+      const url = extractUrl(urlRaw);
+      if (url) return { color, text, url, nextI: j + 1 };
+      return null;
+    }
+
+    // Format 2 — marker only: "кнопка" / "кнопка:" / "кнопка зеленая:"
+    const marker = plain.match(/^(?:кнопка|Button)\s*([a-zа-яёA-ZА-ЯЁ]*)\s*:?\s*$/i);
+    if (!marker) return null;
+    const color = marker[1] || 'зеленая';
     const j = skipBr(lines, i + 1);
     if (j >= lines.length) return null;
     const np = lines[j].trim().replace(/<[^>]+>/g, '').trim();
     if (!np) return null;
-    // Format A: "Text https://url"
-    const sm = np.match(/^(.+?)\s+(https?:\/\/\S+)\s*$/);
+
+    // Sub-format A: "Text https://url" or "Text /relative"
+    const sm = np.match(/^(.+?)\s+(https?:\/\/\S+|\/\S+)\s*$/);
     if (sm) return { color, text: sm[1].trim(), url: sm[2].trim(), nextI: j + 1 };
-    // Format B: text / url on separate lines
+
+    // Sub-format B: text on one line, url on next
     const k = skipBr(lines, j + 1);
-    const up = lines[k]?.trim().replace(/<[^>]+>/g, '').trim();
-    if (k < lines.length && /^https?:\/\/\S+\s*$/.test(up))
-      return { color, text: np, url: up, nextI: k + 1 };
+    const urlRaw = lines[k]?.trim().replace(/<[^>]+>/g, '').trim();
+    const url = urlRaw ? extractUrl(urlRaw) : null;
+    if (url) return { color, text: np, url, nextI: k + 1 };
+
     return null;
   }
 
