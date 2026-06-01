@@ -161,7 +161,7 @@
 
     // Anchor: "Кнопка зеленая:" or "Кнопка белая:" (and english Button green/white)
     // Text may follow on the SAME line after the colon, or on the NEXT line
-    const m = plain.match(/^(?:Кнопка|кнопка|Button)\s+(зелен\w*|бел\w*|green|white)\s*:\s*(.*)/i);
+    const m = plain.match(/^(?:Кнопка|кнопка|Button)\s+(зелен[^\s:]*|бел[^\s:]*|green|white)\s*:\s*(.*)/i);
     if (!m) return null;
 
     const color = m[1];                // зеленая / белая / green / white
