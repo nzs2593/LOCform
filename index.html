@@ -159,19 +159,21 @@
   function parseOneBtn(lines, i) {
     const plain = lines[i].trim().replace(/<[^>]+>/g, '').trim();
 
-    // Anchor: "Кнопка зеленая:" or "Кнопка белая:" (and english Button green/white)
-    // Text may follow on the SAME line after the colon, or on the NEXT line
-    const m = plain.match(/^(?:Кнопка|кнопка|Button)\s+(зелен[^\s:]*|бел[^\s:]*|green|white)\s*:\s*(.*)/i);
-    if (!m) return null;
+    // Format A: "кнопка зеленая: [text]" / "кнопка белая: [text]"
+    const mColor = plain.match(/^(?:Кнопка|кнопка|Button)\s+(зелен[^\s:]*|бел[^\s:]*|green|white)\s*:\s*(.*)/i);
+    // Format B: bare "кнопка" or "кнопка:" (default green, text+URL on next lines)
+    const mBare = !mColor && plain.match(/^(?:Кнопка|кнопка|Button)\s*:?\s*$/i);
 
-    const color = m[1];                // зеленая / белая / green / white
-    const sameLineText = m[2].trim();  // text after colon (may be empty)
+    if (!mColor && !mBare) return null;
+
+    const color = mColor ? mColor[1] : 'зеленая';
+    const sameLineText = mColor ? mColor[2].trim() : '';
 
     if (sameLineText) {
-      // Check if URL is embedded in sameLineText: "Text (/url)" or "Text https://url"
+      // URL may be embedded: "Text (/url)" or "Text https://url" or "Text /url"
       const emb = sameLineText.match(/^(.+?)\s+(\([^)]+\)|https?:\/\/\S+|\/\S+)\s*$/);
       if (emb) return { color, text: emb[1].trim(), url: cleanUrl(emb[2]), nextI: i + 1 };
-      // Otherwise URL is on the next line
+      // URL on next line
       const j = skipBr(lines, i + 1);
       if (j >= lines.length) return null;
       const url = cleanUrl(lines[j].trim().replace(/<[^>]+>/g, '').trim());
@@ -179,17 +181,17 @@
       return { color, text: sameLineText, url, nextI: j + 1 };
     }
 
-    // Text is on the next line
+    // Text (and possibly URL) on next line(s)
     const j = skipBr(lines, i + 1);
     if (j >= lines.length) return null;
     const np = lines[j].trim().replace(/<[^>]+>/g, '').trim();
     if (!np) return null;
 
-    // "Text https://url" or "Text /relative" on same line
-    const sm = np.match(/^(.+?)\s+(https?:\/\/\S+|\/\S+|\(\S+\))\s*$/);
+    // "Text https://url" or "Text (/url)" or "Text /url" on one line
+    const sm = np.match(/^(.+?)\s+(\([^)]+\)|https?:\/\/\S+|\/\S+)\s*$/);
     if (sm) return { color, text: sm[1].trim(), url: cleanUrl(sm[2]), nextI: j + 1 };
 
-    // Text then URL on separate line
+    // Text on one line, URL on the next
     const k = skipBr(lines, j + 1);
     const urlRaw = cleanUrl(lines[k]?.trim().replace(/<[^>]+>/g, '').trim() || '');
     if (urlRaw) return { color, text: np, url: urlRaw, nextI: k + 1 };
